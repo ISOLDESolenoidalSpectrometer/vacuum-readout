@@ -5,6 +5,8 @@ import requests
 from typing import Type, TypeVar
 import re
 
+from . import grafanaauthentication as ga
+
 ################################################################################
 class VacuumGaugeBase:
     """
@@ -21,7 +23,23 @@ class VacuumGaugeBase:
     ################################################################################
     def __init__(self, serial_number : str, channels : list, gauge_names : list, falling_pressure_thresholds : list = None, rising_pressure_thresholds : list = None ):
         """
-        Initiialise all the details TODO
+        Initiialise all the details
+
+        Parameters
+        ==========
+        serial_number : str
+            The serial number of the gauge with which we wish to communicate
+        channels : list
+            The list of channels we need to communicate with on the gauge
+        gauge_names : list
+            The list of names we wish to use when pushing to Grafana
+        falling_pressure_thresholds : list
+            The list of pressure thresholds on a channel-by-channel basis. Default is None.
+            This is triggered when the pressure falls below a certain value.
+        rising_pressure_thresholds : list
+            The list of pressure thresholds on a channel-by-channel basis. Default is None.
+            This is triggered when the pressure rises above a certain value.
+        
         """ 
         # Store constants
         self.serial_number = serial_number
@@ -39,13 +57,27 @@ class VacuumGaugeBase:
 
         self.alert_pressure_falling = [False] * len(self.channels)
         self.alert_pressure_rising = [False] * len(self.channels)
-        
+        self.grafana_username, self.grafana_password, self.grafana_url = None, None, None
+        self.set_grafana_authentication()        
+        return
+
+    ################################################################################
+    def set_grafana_authentication(self, auth : tuple) -> None:
+        """
+        Stores the username, password, and URL for Grafana
+        """
+        self.grafana_username, self.grafana_password, self.grafana_url = auth
         return
 
     ################################################################################
     def open_serial_port(self) -> bool:
         """
-        TODO
+        Opens the serial port
+
+        Returns
+        =======
+        status : bool
+            True if it worked, False if it didn't
         """
         if self.port == None:
             return False
@@ -58,7 +90,12 @@ class VacuumGaugeBase:
     ################################################################################
     def check_if_update_needed(self) -> bool:
         """
-        TODO
+        Checks if the values of the pressure should be updated, based on whether they have changed enough
+        
+        Returns
+        =======
+        status : bool
+            True if it needs to update, False otherwise
         """
         update_values = False
         for i in range(len(self.channels)):
@@ -72,8 +109,6 @@ class VacuumGaugeBase:
             if self.prev_status[i] is not None and int(self.cur_status[i]) is not int(self.prev_status[i]):
                 update_values = True
 
-            #print(i, ": update_ctr = ", update_ctr, ", pressure = ", pressure, ", status", status)
-
             # update values
             self.prev_pressure[i] = self.cur_pressure[i]
             self.prev_status[i] = self.cur_status[i]
@@ -83,7 +118,8 @@ class VacuumGaugeBase:
     ################################################################################
     def get_pressures(self) -> None:
         """
-        TODO
+        Abstract method that needs to be overwritten for each child class to get the
+        pressures from their gauges
         """
         # YOU NEED TO OVERRIDE THIS!
         return
@@ -91,7 +127,8 @@ class VacuumGaugeBase:
     ################################################################################
     def update_alerting_status(self) -> None:
         """
-        TODO
+        Checks if pressure is rising or falling and sets some internal flags if
+        someone needs to be alerted
         """
         for i in range(0,len(self.channels)):
             if self.cur_pressure[i] < self.falling_pressure_thresholds[i]:
@@ -109,7 +146,7 @@ class VacuumGaugeBase:
     ################################################################################
     def push_to_grafana(self) -> None:
         """
-        TODO
+        Pushes a payload to Grafana
         """
         payload = ''
         for i in range(len(self.channels)):
@@ -118,7 +155,7 @@ class VacuumGaugeBase:
             payload += payload_p + payload_s
 
         try:
-            r = requests.post('https://dbod-iss.cern.ch:8080/write?db=vacuum', auth = ('admin', 'issmonitor'), data=payload, verify=False, timeout=VacuumGauge.HTTP_TIMEOUT)
+            r = requests.post(self.grafana_url, auth = (self.grafana_username, self.grafana_password), data=payload, verify=False, timeout=VacuumGauge.HTTP_TIMEOUT)
             print(f"{dt.datetime.now().strftime( '%Y.%m.%d %H:%M:%S' )} pushed values to Grafana")
         except Exception:
             pass
@@ -128,13 +165,28 @@ class VacuumGaugeBase:
 ################################################################################
 class MKSGauge(VacuumGaugeBase):
     """
-    TODO
+    MKS gauge - used for ISS backing pressure
     """
     BRAND = 'MKS'
     ################################################################################
     def __init__(self, serial_number : str, channels : list, gauge_names : list, falling_pressure_thresholds : list = None, rising_pressure_thresholds : list = None):
         """
-        TODO
+        Specific initialisation for MKS gauge
+
+        Parameters
+        ==========
+        serial_number : str
+            The serial number of the gauge with which we wish to communicate
+        channels : list
+            The list of channels we need to communicate with on the gauge
+        gauge_names : list
+            The list of names we wish to use when pushing to Grafana
+        falling_pressure_thresholds : list
+            The list of pressure thresholds on a channel-by-channel basis. Default is None.
+            This is triggered when the pressure falls below a certain value.
+        rising_pressure_thresholds : list
+            The list of pressure thresholds on a channel-by-channel basis. Default is None.
+            This is triggered when the pressure rises above a certain value.
         """
         # MKS-specific code here
         self.LINETERM = '\x0D'+'\x0A'
@@ -148,7 +200,7 @@ class MKSGauge(VacuumGaugeBase):
     ################################################################################
     def send_command(self, cmd : str) -> str:
         """
-        TODO
+        Helpful command for sending messages to the MKS gauge
         """
         self.serial.write((cmd + self.LINETERM).encode('ascii') )
         ack = self.serial.readline().decode('ascii')
@@ -157,7 +209,7 @@ class MKSGauge(VacuumGaugeBase):
     ################################################################################
     def get_pressures(self) -> None:
         """
-        TODO
+        Overwritten method to get pressures on the MKS gauge
         """
         if self.open_serial_port():
             # Log every second
@@ -188,13 +240,28 @@ class MKSGauge(VacuumGaugeBase):
 ################################################################################
 class PfeifferGauge(VacuumGaugeBase):
     """
-    TODO
+    Pfeiffer gauge - used for the upstream pressure
     """
     BRAND = 'Pfeiffer'
     ################################################################################
     def __init__(self, serial_number : str, channels : list, gauge_names : list, falling_pressure_thresholds : list = None, rising_pressure_thresholds : list = None):
         """
-        TODO
+        Pfeiffer initialisation
+
+        Parameters
+        ==========
+        serial_number : str
+            The serial number of the gauge with which we wish to communicate
+        channels : list
+            The list of channels we need to communicate with on the gauge
+        gauge_names : list
+            The list of names we wish to use when pushing to Grafana
+        falling_pressure_thresholds : list
+            The list of pressure thresholds on a channel-by-channel basis. Default is None.
+            This is triggered when the pressure falls below a certain value.
+        rising_pressure_thresholds : list
+            The list of pressure thresholds on a channel-by-channel basis. Default is None.
+            This is triggered when the pressure rises above a certain value.
         """
         # Pfeiffer-specific code here
         self.LINETERM = '\x0D'+'\x0A'
@@ -207,7 +274,7 @@ class PfeifferGauge(VacuumGaugeBase):
     ################################################################################
     def get_pressures(self) -> None:
         """
-        TODO
+        Overwritten method to get pressures on the Pfeiffer gauge
         """
         for i in range(len(self.channels)):
             self.serial.write(('PR' + str(self.channels[i]) + self.LINETERM).encode('ascii') )
@@ -224,11 +291,29 @@ class PfeifferGauge(VacuumGaugeBase):
 ################################################################################
 class EdwardsGauge(VacuumGaugeBase):
     """
-    TODO
+    Edwards gauge - used for ISS ionisation chamber
     """
     BRAND = 'Edwards'
     ################################################################################
     def __init__(self, serial_number : str, channels : list, gauge_names : list, falling_pressure_thresholds : list = None, rising_pressure_thresholds : list = None):
+        """
+        Edwards initialisation
+
+        Parameters
+        ==========
+        serial_number : str
+            The serial number of the gauge with which we wish to communicate
+        channels : list
+            The list of channels we need to communicate with on the gauge
+        gauge_names : list
+            The list of names we wish to use when pushing to Grafana
+        falling_pressure_thresholds : list
+            The list of pressure thresholds on a channel-by-channel basis. Default is None.
+            This is triggered when the pressure falls below a certain value.
+        rising_pressure_thresholds : list
+            The list of pressure thresholds on a channel-by-channel basis. Default is None.
+            This is triggered when the pressure rises above a certain value.
+        """
         # Edwards-specific code here
         self.LINETERM = '\r'
         self.ENQ = '?'
@@ -240,7 +325,7 @@ class EdwardsGauge(VacuumGaugeBase):
     ################################################################################
     def get_pressures(self) -> None:
         """
-        TODO
+        Overwritten method to get pressures on Edwards gauge
         """
         for i in range(len(self.channels)):
             self.serial.write(('?GA' + str(self.channels[i]) + self.LINETERM).encode('ascii') )
@@ -260,7 +345,7 @@ T = TypeVar("T", bound="GaugeBrand")
 
 class GaugeBrand(enum.Enum):
     """
-    TODO
+    Simple ENUM class to determine gauge type
     """
     PFEIFFER = 'pfeiffer'
     MKS = 'mks'
@@ -270,7 +355,7 @@ class GaugeBrand(enum.Enum):
     @classmethod
     def get_brand_from_str( cls : Type[T], brand : str ) -> T:
         """
-        TODO
+        Method to convert string to enum
         """
         for member in GaugeBrand:
             if member.value == brand:
@@ -281,6 +366,26 @@ class GaugeBrand(enum.Enum):
 
 ################################################################################
 def VacuumGauge( brand : GaugeBrand, serial_number : str, channels : list, gauge_names, falling_pressure_thresholds : list = None, rising_pressure_thresholds : list = None ) -> VacuumGaugeBase:
+    """
+    Custom constructor function for each gauge type.
+
+    Parameters
+    ==========
+    brand : GaugeBrand(enum)
+        enum stating which brand the gauge belongs to - this is used to call the right constructor
+    serial_number : str
+        The serial number of the gauge with which we wish to communicate
+    channels : list
+        The list of channels we need to communicate with on the gauge
+    gauge_names : list
+        The list of names we wish to use when pushing to Grafana
+    falling_pressure_thresholds : list
+        The list of pressure thresholds on a channel-by-channel basis. Default is None.
+        This is triggered when the pressure falls below a certain value.
+    rising_pressure_thresholds : list
+        The list of pressure thresholds on a channel-by-channel basis. Default is None.
+        This is triggered when the pressure rises above a certain value.
+    """
     if brand == GaugeBrand.PFEIFFER:
         return PfeifferGauge( serial_number, channels, gauge_names, falling_pressure_thresholds, rising_pressure_thresholds )
     if brand == GaugeBrand.MKS:
