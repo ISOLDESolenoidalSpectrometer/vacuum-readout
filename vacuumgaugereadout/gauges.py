@@ -10,6 +10,9 @@ import re
 from . import grafanaauthentication as ga
 from . import utils
 
+import urllib3
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
 ################################################################################
 class VacuumGaugeBase:
     """
@@ -340,7 +343,6 @@ class EdwardsGauge(VacuumGaugeBase):
         for i in range(len(self.channels)):
             self.serial.write(('?GA' + str(self.channels[i]) + self.LINETERM).encode('ascii') )
             res = self.serial.readline().decode('ascii')
-            print(repr(res))
             pattern = re.match(r'(Err)(\d*)', res, re.IGNORECASE)
             if pattern is not None:
                 self.cur_pressure[i] = 1010

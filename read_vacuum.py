@@ -41,7 +41,7 @@ def main( interface : mp.MattermostInterface ) -> None:
             mp.MattermostMessage(
                 colour='#FF0000',
                 title='Vacuum readout script terminated?',
-                text=f'A vacuum script terminated with id {script_id}. If this wasn\'t planned, please restart it'
+                text=f'A vacuum script terminated with id \'{script_id}\'. If this wasn\'t planned, please restart it'
             )
         )
 
