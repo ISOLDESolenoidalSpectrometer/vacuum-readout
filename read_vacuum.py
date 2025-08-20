@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 import vacuumgaugereadout as vgr
-import mattermostpython as mp
 import traceback
 
 ################################################################################
@@ -25,11 +24,13 @@ def main() -> None:
     
     # Now run the script
     try:
-        vgr.start_threads( interface, script_id)
+        vgr.start_threads( gauges, interface, script_id)
     except Exception as e:
         print(traceback.format_exc())
         if interface != None:
             interface.post_message_from_exception(e)
+
+    return
 
 
 ################################################################################

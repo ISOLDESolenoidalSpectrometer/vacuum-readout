@@ -217,13 +217,13 @@ class VacuumGaugeReadoutThread( threading.Thread ):
         return
 
 ################################################################################
-def start_threads( interface : mp.MattermostInterface, id : str ):
+def start_threads( list_of_gauges : list, interface : mp.MattermostInterface, id : str ):
     """
     Set up the threads used to sample the vacuum gauges
     """
     # Start the readout
     threads : List[VacuumGaugeReadoutThread]= []
-    for gauge in gauges:
+    for gauge in list_of_gauges:
         readout = VacuumGaugeReadoutThread( gauge, interface )
         threads.append(readout)
         readout.start()
