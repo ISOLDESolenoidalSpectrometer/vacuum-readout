@@ -135,6 +135,9 @@ def count_numbers_in_list( mylist : list ) -> int:
         Number of non-None items in the list
     """
     answer = 0
+    if type(mylist) != list:
+        return answer
+    
     for i in range(0,len(mylist)):
         if type(mylist[i]) == list:
             answer += count_numbers_in_list(mylist[i])
