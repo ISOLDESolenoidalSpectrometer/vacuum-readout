@@ -2,6 +2,7 @@
 import vacuumgaugereadout as vgr
 import mattermostpython as mp
 import traceback
+from typing import List
 
 ################################################################################
 def main( interface : mp.MattermostInterface ) -> None:
@@ -20,15 +21,19 @@ def main( interface : mp.MattermostInterface ) -> None:
         return
     
     # Start the readout
-    threads = []
+    threads : List[vgr.VacuumGaugeReadoutThread]= []
     for gauge in gauges:
         readout = vgr.VacuumGaugeReadoutThread( gauge, interface )
         threads.append(readout)
         readout.start()
 
     # Wait for all the threads to rejoin
-    for thread in threads:
-        thread.join()
+    try:
+        for thread in threads:
+            thread.join()
+    except KeyboardInterrupt:
+        for thread in threads:
+            thread.kill_thread()
 
     # Post message to mattermost to indicate completion of script
     if interface != None:

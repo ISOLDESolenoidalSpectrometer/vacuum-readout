@@ -58,6 +58,9 @@ class VacuumGaugeReadoutThread( threading.Thread ):
         self.alert_pressure_falling = [False]*len(self.gauge.channels)
         self.alert_pressure_rising = [False]*len(self.gauge.channels)
 
+        # Define is_running bool
+        self.is_running = True
+
         # Call parent threading constructor
         super().__init__()
 
@@ -167,7 +170,7 @@ class VacuumGaugeReadoutThread( threading.Thread ):
 
         # Loop for infinity
         try:
-            while True:
+            while self.is_running:
                 # worth sending to influx?
                 update_values = False
 
@@ -203,3 +206,11 @@ class VacuumGaugeReadoutThread( threading.Thread ):
 
             # Close connection to gauge
             self.gauge.serial.close()
+    
+    ################################################################################
+    def kill_thread(self):
+        """
+        Kills the thread
+        """
+        self.is_running = False
+        return

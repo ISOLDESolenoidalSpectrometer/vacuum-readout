@@ -164,8 +164,7 @@ class VacuumGaugeBase:
             payload += payload_p + payload_s
 
         try:
-            print(self.grafana_username, self.grafana_password, self.grafana_url)
-            #r = requests.post(self.grafana_url, auth = (self.grafana_username, self.grafana_password), data=payload, verify=False, timeout=VacuumGaugeBase.HTTP_TIMEOUT)
+            r = requests.post(self.grafana_url, auth = (self.grafana_username, self.grafana_password), data=payload, verify=False, timeout=VacuumGaugeBase.HTTP_TIMEOUT)
             print(f"{dt.datetime.now().strftime( '%Y.%m.%d %H:%M:%S' )} pushed values to Grafana")
         except Exception as e:
             print(e)
