@@ -54,6 +54,9 @@ class VacuumGaugeReadoutThread( threading.Thread ):
         # Store mattermost interface
         self.mattermost = mattermost_interface
 
+        # Call parent threading constructor
+        super().__init__(self)
+
     ################################################################################
     def send_mattermost_message( self, message : mp.MattermostMessage ) -> None:
         """
