@@ -122,9 +122,9 @@ def create_gauges_from_command_line_arguments() -> list:
 
     # Check if nothing provided for thresholds and convert to list
     if low_pressure_thresholds == None:
-        low_pressure_thresholds = [None]
+        low_pressure_thresholds = [None]*len(channels)
     if high_pressure_thresholds == None:
-        high_pressure_thresholds = [None]
+        high_pressure_thresholds = [None]*len(channels)
 
     # Convert grafana names, channel names, and thresholds
     for i in range(len(channels)):
