@@ -426,6 +426,7 @@ def create_gauges_from_command_line_arguments() -> list:
     parser.add_argument('-F', '--falling-pressure-threshold',  help='pressure (in mbar) below which to send an alert saying everything is OK',   metavar='FP',       default=None, dest='fpthresh',      action='append' )
     parser.add_argument('-i', '--id',                          help='identifier for which instance of the script, in case something goes wrong', metavar='ID',       default=None, dest='id',            action='store' )
     parser.add_argument('-G', '--grafana-authentication',      help='grafana authentication file path',                                          metavar='GrafAuth', default=None, dest='grafauth',      action='store' )
+    parser.add_argument('-M', '--mattermost-url',              help='mattermost url or file path',                                               metavar='MatURL',   default=None, dest='maturl',        action='store' )
     args = parser.parse_args()
 
     # Store arguments here
@@ -437,6 +438,7 @@ def create_gauges_from_command_line_arguments() -> list:
     falling_pressure_thresholds = args.fpthresh
     id = args.id
     grafana_file_path = args.grafauth
+    mattermost_url = args.maturl
 
 
     # Check if nothing provided for thresholds and convert to list
@@ -501,4 +503,4 @@ def create_gauges_from_command_line_arguments() -> list:
     if id == None:
         id = '[someone forgot to identify the script - more work for you!]'
 
-    return list_of_gauges, id
+    return list_of_gauges, id, mattermost_url

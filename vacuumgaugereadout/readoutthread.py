@@ -10,6 +10,7 @@ from the gauge according to UPDATE_TIME
 from serial.tools import list_ports
 import threading
 import time
+from typing import List
 import traceback
 
 from . import gauges
@@ -214,3 +215,35 @@ class VacuumGaugeReadoutThread( threading.Thread ):
         """
         self.is_running = False
         return
+
+################################################################################
+def start_threads( interface : mp.MattermostInterface, id : str ):
+    """
+    Set up the threads used to sample the vacuum gauges
+    """
+    # Start the readout
+    threads : List[VacuumGaugeReadoutThread]= []
+    for gauge in gauges:
+        readout = VacuumGaugeReadoutThread( gauge, interface )
+        threads.append(readout)
+        readout.start()
+
+    # Wait for all the threads to rejoin
+    try:
+        for thread in threads:
+            thread.join()
+    except KeyboardInterrupt:
+        for thread in threads:
+            thread.kill_thread()
+
+    # Post message to mattermost to indicate completion of script
+    if interface != None:
+        interface.post(
+            mp.MattermostMessage(
+                colour='#FF0000',
+                title='Vacuum readout script terminated?',
+                text=f'A vacuum script terminated with id \'{id}\'. If this wasn\'t planned, please restart it'
+            )
+        )
+
+    return
