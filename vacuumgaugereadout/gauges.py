@@ -57,8 +57,7 @@ class VacuumGaugeBase:
 
         self.alert_pressure_falling = [False] * len(self.channels)
         self.alert_pressure_rising = [False] * len(self.channels)
-        self.grafana_username, self.grafana_password, self.grafana_url = None, None, None
-        self.set_grafana_authentication()        
+        self.grafana_username, self.grafana_password, self.grafana_url = None, None, None    
         return
 
     ################################################################################

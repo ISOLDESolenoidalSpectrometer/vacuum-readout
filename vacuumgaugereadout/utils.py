@@ -7,7 +7,9 @@ A list of handy functions for reading out information from the vacuum gauges
 
 import argparse as ap
 import mattermostpython as mp
+from typing import List
 from . import gauges
+from . import grafanaauthentication
 
 ################################################################################
 def _csv_str_to_list( csv_str : str, cast_type = None  ) -> list:
@@ -102,13 +104,14 @@ def create_gauges_from_command_line_arguments() -> list:
         A list of VacuumGaugeBase objects
     """
     parser = ap.ArgumentParser(prog='', description='', epilog='')
-    parser.add_argument('-b', '--brand',                   help='brand of the vacuum gauge (\'pfeiffer\', \'edwards\', or \'mks\')',         metavar='BRAND',    default=None, dest='brand',        action='append' )
-    parser.add_argument('-s', '--serial-number',           help='serial number of the vacuum gauge',                                         metavar='SN',       default=None, dest='serialnumber', action='append' )
-    parser.add_argument('-c', '--channels',                help='list of channels to sample on the gauge',                                   metavar='CHAN',     default=None, dest='channel',      action='append' )
-    parser.add_argument('-g', '--grafana-label',           help='name of the gauge in Grafana',                                              metavar='GRAFNAME', default=None, dest='grafana',      action='append' )
-    parser.add_argument('-H', '--high-pressure-threshold', help='pressure (in mbar) above which to send an alert saying something is wrong', metavar='HP',       default=None, dest='hpthresh',     action='append' )
-    parser.add_argument('-L', '--low-pressure-threshold',  help='pressure (in mbar) below which to send an alert saying everything is OK',   metavar='LP',       default=None, dest='lpthresh',     action='append' )
-    parser.add_argument('-i', '--id',                      help='identifier for which instance of the script, in case something goes wrong', metavar='ID',       default=None, dest='id',           action='store')
+    parser.add_argument('-b', '--brand',                   help='brand of the vacuum gauge (\'pfeiffer\', \'edwards\', or \'mks\')',         metavar='BRAND',    default=None, dest='brand',         action='append' )
+    parser.add_argument('-s', '--serial-number',           help='serial number of the vacuum gauge',                                         metavar='SN',       default=None, dest='serialnumber',  action='append' )
+    parser.add_argument('-c', '--channels',                help='list of channels to sample on the gauge',                                   metavar='CHAN',     default=None, dest='channel',       action='append' )
+    parser.add_argument('-g', '--grafana-label',           help='name of the gauge in Grafana',                                              metavar='GRAFNAME', default=None, dest='grafana',       action='append' )
+    parser.add_argument('-H', '--high-pressure-threshold', help='pressure (in mbar) above which to send an alert saying something is wrong', metavar='HP',       default=None, dest='hpthresh',      action='append' )
+    parser.add_argument('-L', '--low-pressure-threshold',  help='pressure (in mbar) below which to send an alert saying everything is OK',   metavar='LP',       default=None, dest='lpthresh',      action='append' )
+    parser.add_argument('-i', '--id',                      help='identifier for which instance of the script, in case something goes wrong', metavar='ID',       default=None, dest='id',            action='store' )
+    parser.add_argument('-G', '--grafana-authentication',  help='grafana authentication file path',                                          metavar='GrafAuth', default=None, dest='grafauth',      action='store' )
     args = parser.parse_args()
 
     # Store arguments here
@@ -119,6 +122,8 @@ def create_gauges_from_command_line_arguments() -> list:
     high_pressure_thresholds = args.hpthresh
     low_pressure_thresholds = args.lpthresh
     id = args.id
+    grafana_file_path = args.grafauth
+
 
     # Check if nothing provided for thresholds and convert to list
     if low_pressure_thresholds == None:
@@ -168,9 +173,15 @@ def create_gauges_from_command_line_arguments() -> list:
         brands[i] = gauges.GaugeBrand.get_brand_from_str( brands[i] )
 
     # Turn gauge numbers into a list of numbers
-    list_of_gauges = []
+    list_of_gauges : List[gauges.VacuumGaugeBase] = []
     for i in range(0,len(serial_numbers)):
         list_of_gauges.append( gauges.VacuumGauge( brands[i], serial_numbers[i], channels[i], grafana[i] ) )
+
+    # Set Grafana authentication
+    auth = grafanaauthentication.get_grafana_authentication( grafana_file_path )
+
+    for gauge in list_of_gauges:
+        gauge.set_grafana_authentication( auth )
 
     # Sanitise ID input
     if id == None:

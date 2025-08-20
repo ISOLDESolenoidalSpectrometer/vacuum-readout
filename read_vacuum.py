@@ -22,7 +22,7 @@ def main( interface : mp.MattermostInterface ) -> None:
     # Start the readout
     threads = []
     for gauge in gauges:
-        readout = vgr.VacuumGaugeReadoutThread( gauge, '.grafana_authentication.txt', interface )
+        readout = vgr.VacuumGaugeReadoutThread( gauge, interface )
         threads.append(readout)
         readout.start()
 

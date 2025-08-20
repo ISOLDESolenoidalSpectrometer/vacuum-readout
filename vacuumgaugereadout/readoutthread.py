@@ -24,7 +24,7 @@ class VacuumGaugeReadoutThread( threading.Thread ):
     UPDATE_TIME = 0.5 #seconds
 
     ################################################################################
-    def __init__(self, gauge : gauges.VacuumGaugeBase, grafana_file : str, mattermost_interface : mp.MattermostInterface = None ):
+    def __init__(self, gauge : gauges.VacuumGaugeBase, mattermost_interface : mp.MattermostInterface = None ):
         """
         Initialise the thread
 
@@ -50,9 +50,6 @@ class VacuumGaugeReadoutThread( threading.Thread ):
 
         if self.gauge == None:
             raise ValueError(f"ValueError: Could not find gauge of the given serial number {gauge.serial_number}")
-
-        # Store grafana authentication
-        self.grafana_username, self.grafana_password, self.grafana_url = ga.get_grafana_authentication( grafana_file )
 
         # Store mattermost interface
         self.mattermost = mattermost_interface
