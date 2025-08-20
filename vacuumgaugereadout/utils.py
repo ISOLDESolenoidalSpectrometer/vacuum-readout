@@ -5,14 +5,10 @@ Utils
 A list of handy functions for reading out information from the vacuum gauges
 """
 
-import argparse as ap
 import mattermostpython as mp
-from typing import List
-from . import gauges
-from . import grafanaauthentication
 
 ################################################################################
-def _csv_str_to_list( csv_str : str, cast_type = None  ) -> list:
+def csv_str_to_list( csv_str : str, cast_type = None  ) -> list:
     """
     Converts a string containing commas into a list. It will also cast the items 
     in the list to the specified type. This must be supplied.
@@ -49,7 +45,7 @@ def _csv_str_to_list( csv_str : str, cast_type = None  ) -> list:
     
 
 ################################################################################
-def _create_optimal_thresholds_from_channels( channels : list, thresholds : list ) -> list:
+def create_optimal_thresholds_from_channels( channels : list, thresholds : list ) -> list:
     """
     A function to deal with unspecified thresholds. It will throw errors if there 
     isn't a one-to-one correspondence between channels and thresholds, or it will 
@@ -93,101 +89,7 @@ def _create_optimal_thresholds_from_channels( channels : list, thresholds : list
 
         return thresholds
 
-################################################################################
-def create_gauges_from_command_line_arguments() -> list:
-    """
-    A function that converts command-line arguments into a list of VacuumGaugeBase objects
 
-    Returns
-    =======
-    list_of_gauges : list[VacuumGaugeBase]
-        A list of VacuumGaugeBase objects
-    """
-    parser = ap.ArgumentParser(prog='', description='', epilog='')
-    parser.add_argument('-b', '--brand',                   help='brand of the vacuum gauge (\'pfeiffer\', \'edwards\', or \'mks\')',         metavar='BRAND',    default=None, dest='brand',         action='append' )
-    parser.add_argument('-s', '--serial-number',           help='serial number of the vacuum gauge',                                         metavar='SN',       default=None, dest='serialnumber',  action='append' )
-    parser.add_argument('-c', '--channels',                help='list of channels to sample on the gauge',                                   metavar='CHAN',     default=None, dest='channel',       action='append' )
-    parser.add_argument('-g', '--grafana-label',           help='name of the gauge in Grafana',                                              metavar='GRAFNAME', default=None, dest='grafana',       action='append' )
-    parser.add_argument('-H', '--high-pressure-threshold', help='pressure (in mbar) above which to send an alert saying something is wrong', metavar='HP',       default=None, dest='hpthresh',      action='append' )
-    parser.add_argument('-L', '--low-pressure-threshold',  help='pressure (in mbar) below which to send an alert saying everything is OK',   metavar='LP',       default=None, dest='lpthresh',      action='append' )
-    parser.add_argument('-i', '--id',                      help='identifier for which instance of the script, in case something goes wrong', metavar='ID',       default=None, dest='id',            action='store' )
-    parser.add_argument('-G', '--grafana-authentication',  help='grafana authentication file path',                                          metavar='GrafAuth', default=None, dest='grafauth',      action='store' )
-    args = parser.parse_args()
-
-    # Store arguments here
-    serial_numbers = args.serialnumber
-    brands = args.brand
-    channels = args.channel
-    grafana = args.grafana
-    high_pressure_thresholds = args.hpthresh
-    low_pressure_thresholds = args.lpthresh
-    id = args.id
-    grafana_file_path = args.grafauth
-
-
-    # Check if nothing provided for thresholds and convert to list
-    if low_pressure_thresholds == None:
-        low_pressure_thresholds = [None]*len(channels)
-    if high_pressure_thresholds == None:
-        high_pressure_thresholds = [None]*len(channels)
-
-    # Convert grafana names, channel names, and thresholds
-    for i in range(len(channels)):
-        channels[i] = _csv_str_to_list( channels[i], int )
-        grafana[i] = _csv_str_to_list( grafana[i], str )
-        low_pressure_thresholds[i] = _csv_str_to_list( low_pressure_thresholds[i], float )
-        high_pressure_thresholds[i] = _csv_str_to_list( high_pressure_thresholds[i], float )
-
-    # Possibility that no pressure thresholds specified. Ensure they are the same length with "None"
-    low_pressure_thresholds = _create_optimal_thresholds_from_channels( channels, low_pressure_thresholds )
-    high_pressure_thresholds = _create_optimal_thresholds_from_channels( channels, high_pressure_thresholds )
-
-    # Check same number for each item
-    if len(serial_numbers) != len(brands) or \
-       len(serial_numbers) != len(brands) or \
-       len(serial_numbers) != len(channels) or \
-       len(serial_numbers) != len(grafana) or \
-       len(serial_numbers) != len(low_pressure_thresholds) or \
-       len(serial_numbers) != len(high_pressure_thresholds):
-        print(f"Serial numbers:           {len(serial_numbers)}")
-        print(f"Brands:                   {len(brands)}")
-        print(f"Channels:                 {len(channels)}")
-        print(f"Grafana name:             {len(grafana)}")
-        print(f"High-pressure thresholds: {len(high_pressure_thresholds)}")
-        print(f"Low-pressure thresholds:  {len(low_pressure_thresholds)}")
-        print("Must be same number of every item to initialise gauges correctly. ERROR!")
-        return None
-    
-    # Check same length for channels, grafana names - pressure thresholds already checked!
-    for i in range(0,len(channels)):
-        if len(channels[i]) != len(grafana[i]):
-            raise IndexError(f"Mismatch between number of channels = {channels[i]} and list of grafana names = {grafana[i]}")
-        
-    # Check brand names
-    for i in range(0,len(brands)):
-        while type( brands[i] ) == list:
-            if len(brands[i]) > 1:
-                raise IndexError(f"Cannot parse object with length > 1: {brands}")
-            brands[i] = brands[i][0]
-        
-        brands[i] = gauges.GaugeBrand.get_brand_from_str( brands[i] )
-
-    # Turn gauge numbers into a list of numbers
-    list_of_gauges : List[gauges.VacuumGaugeBase] = []
-    for i in range(0,len(serial_numbers)):
-        list_of_gauges.append( gauges.VacuumGauge( brands[i], serial_numbers[i], channels[i], grafana[i] ) )
-
-    # Set Grafana authentication
-    auth = grafanaauthentication.get_grafana_authentication( grafana_file_path )
-
-    for gauge in list_of_gauges:
-        gauge.set_grafana_authentication( auth )
-
-    # Sanitise ID input
-    if id == None:
-        id = '[someone forgot to identify the script - more work for you!]'
-
-    return list_of_gauges, id
 
 ################################################################################
 def init_mattermost_interface( filepath : str ) -> mp.MattermostInterface:
@@ -216,3 +118,27 @@ def init_mattermost_interface( filepath : str ) -> mp.MattermostInterface:
     mp.MattermostMessage.set_default_footer( 'Message delivered by the ISS Raspberry Pi' )
     mp.MattermostMessage.set_default_notification_message( 'Vacuum pressure alert!' )
     return interface
+
+################################################################################
+def count_numbers_in_list( mylist : list ) -> int:
+    """
+    Work out how many non-None items there are in a list
+
+    Parameters
+    ==========
+    mylist : list
+        List of items
+    
+    Returns
+    =======
+    answer : int
+        Number of non-None items in the list
+    """
+    answer = 0
+    for i in range(0,len(mylist)):
+        if type(mylist[i]) == list:
+            answer += count_numbers_in_list(mylist[i])
+        else:
+            if mylist[i] != None:
+                answer += 1
+    return answer

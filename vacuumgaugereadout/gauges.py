@@ -1,11 +1,13 @@
+import argparse as ap
 import datetime as dt
 import enum
 import serial
 import requests
-from typing import Type, TypeVar
+from typing import List, Type, TypeVar
 import re
 
 from . import grafanaauthentication as ga
+from . import utils
 
 ################################################################################
 class VacuumGaugeBase:
@@ -47,6 +49,11 @@ class VacuumGaugeBase:
         self.gauge_names = gauge_names
         self.falling_pressure_thresholds = falling_pressure_thresholds
         self.rising_pressure_thresholds = rising_pressure_thresholds
+
+        # Check whether we should send alerts
+        self.enable_falling_pressure_alerts = bool(utils.count_numbers_in_list(falling_pressure_thresholds))
+        self.enable_risiing_pressure_alerts = bool(utils.count_numbers_in_list(rising_pressure_thresholds))
+
         self.port = None
         self.speed=9600
 
@@ -130,15 +137,17 @@ class VacuumGaugeBase:
         someone needs to be alerted
         """
         for i in range(0,len(self.channels)):
-            if self.cur_pressure[i] < self.falling_pressure_thresholds[i]:
-                self.alert_pressure_falling[i] = True
-            else:
-                self.alert_pressure_falling[i] = False
+            if self.enable_falling_pressure_alerts:
+                if self.cur_pressure[i] < self.falling_pressure_thresholds[i]:
+                    self.alert_pressure_falling[i] = True
+                else:
+                    self.alert_pressure_falling[i] = False
             
-            if self.cur_pressure[i] > self.rising_pressure_thresholds[i]:
-                self.alert_pressure_rising[i] = True
-            else:
-                self.alert_pressure_rising[i] = False
+            if self.enable_risiing_pressure_alerts:
+                if self.cur_pressure[i] > self.rising_pressure_thresholds[i]:
+                    self.alert_pressure_rising[i] = True
+                else:
+                    self.alert_pressure_rising[i] = False
         
         return
 
@@ -392,3 +401,100 @@ def VacuumGauge( brand : GaugeBrand, serial_number : str, channels : list, gauge
     if brand == GaugeBrand.EDWARDS:
         return EdwardsGauge( serial_number, channels, gauge_names, falling_pressure_thresholds, rising_pressure_thresholds )
     raise ValueError("Did not recognise gauge brand {brand}. Cannot create new gauge object.")
+
+
+################################################################################
+def create_gauges_from_command_line_arguments() -> list:
+    """
+    A function that converts command-line arguments into a list of VacuumGaugeBase objects
+
+    Returns
+    =======
+    list_of_gauges : list[VacuumGaugeBase]
+        A list of VacuumGaugeBase objects
+    """
+    parser = ap.ArgumentParser(prog='', description='', epilog='')
+    parser.add_argument('-b', '--brand',                       help='brand of the vacuum gauge (\'pfeiffer\', \'edwards\', or \'mks\')',         metavar='BRAND',    default=None, dest='brand',         action='append' )
+    parser.add_argument('-s', '--serial-number',               help='serial number of the vacuum gauge',                                         metavar='SN',       default=None, dest='serialnumber',  action='append' )
+    parser.add_argument('-c', '--channels',                    help='list of channels to sample on the gauge',                                   metavar='CHAN',     default=None, dest='channel',       action='append' )
+    parser.add_argument('-g', '--grafana-label',               help='name of the gauge in Grafana',                                              metavar='GRAFNAME', default=None, dest='grafana',       action='append' )
+    parser.add_argument('-R', '--rising-pressure-threshold',   help='pressure (in mbar) above which to send an alert saying something is wrong', metavar='RP',       default=None, dest='rpthresh',      action='append' )
+    parser.add_argument('-F', '--falling-pressure-threshold',  help='pressure (in mbar) below which to send an alert saying everything is OK',   metavar='FP',       default=None, dest='fpthresh',      action='append' )
+    parser.add_argument('-i', '--id',                          help='identifier for which instance of the script, in case something goes wrong', metavar='ID',       default=None, dest='id',            action='store' )
+    parser.add_argument('-G', '--grafana-authentication',      help='grafana authentication file path',                                          metavar='GrafAuth', default=None, dest='grafauth',      action='store' )
+    args = parser.parse_args()
+
+    # Store arguments here
+    serial_numbers = args.serialnumber
+    brands = args.brand
+    channels = args.channel
+    grafana = args.grafana
+    rising_pressure_thresholds = args.rpthresh
+    falling_pressure_thresholds = args.fpthresh
+    id = args.id
+    grafana_file_path = args.grafauth
+
+
+    # Check if nothing provided for thresholds and convert to list
+    if falling_pressure_thresholds == None:
+        falling_pressure_thresholds = [None]*len(channels)
+    if rising_pressure_thresholds == None:
+        rising_pressure_thresholds = [None]*len(channels)
+
+    # Convert grafana names, channel names, and thresholds
+    for i in range(len(channels)):
+        channels[i] = utils.csv_str_to_list( channels[i], int )
+        grafana[i] = utils.csv_str_to_list( grafana[i], str )
+        falling_pressure_thresholds[i] = utils.csv_str_to_list( falling_pressure_thresholds[i], float )
+        rising_pressure_thresholds[i] = utils.csv_str_to_list( rising_pressure_thresholds[i], float )
+
+    # Possibility that no pressure thresholds specified. Ensure they are the same length with "None"
+    falling_pressure_thresholds = utils.create_optimal_thresholds_from_channels( channels, falling_pressure_thresholds )
+    rising_pressure_thresholds = utils.create_optimal_thresholds_from_channels( channels, rising_pressure_thresholds )
+
+    # Check same number for each item
+    if len(serial_numbers) != len(brands) or \
+       len(serial_numbers) != len(brands) or \
+       len(serial_numbers) != len(channels) or \
+       len(serial_numbers) != len(grafana) or \
+       len(serial_numbers) != len(falling_pressure_thresholds) or \
+       len(serial_numbers) != len(rising_pressure_thresholds):
+        print(f"Serial numbers:           {len(serial_numbers)}")
+        print(f"Brands:                   {len(brands)}")
+        print(f"Channels:                 {len(channels)}")
+        print(f"Grafana name:             {len(grafana)}")
+        print(f"High-pressure thresholds: {len(rising_pressure_thresholds)}")
+        print(f"Low-pressure thresholds:  {len(falling_pressure_thresholds)}")
+        print("Must be same number of every item to initialise gauges correctly. ERROR!")
+        return None
+    
+    # Check same length for channels, grafana names - pressure thresholds already checked!
+    for i in range(0,len(channels)):
+        if len(channels[i]) != len(grafana[i]):
+            raise IndexError(f"Mismatch between number of channels = {channels[i]} and list of grafana names = {grafana[i]}")
+        
+    # Check brand names
+    for i in range(0,len(brands)):
+        while type( brands[i] ) == list:
+            if len(brands[i]) > 1:
+                raise IndexError(f"Cannot parse object with length > 1: {brands}")
+            brands[i] = brands[i][0]
+        
+        brands[i] = GaugeBrand.get_brand_from_str( brands[i] )
+
+    # Turn gauge numbers into a list of numbers
+    list_of_gauges : List[VacuumGaugeBase] = []
+    for i in range(0,len(serial_numbers)):
+        list_of_gauges.append( VacuumGauge( brands[i], serial_numbers[i], channels[i], grafana[i], falling_pressure_thresholds, rising_pressure_thresholds ) )
+
+    # Set Grafana authentication
+    auth = ga.get_grafana_authentication( grafana_file_path )
+
+    for gauge in list_of_gauges:
+        gauge.set_grafana_authentication( auth )
+
+    # Sanitise ID input
+    if id == None:
+        id = '[someone forgot to identify the script - more work for you!]'
+
+    return list_of_gauges, id
