@@ -3,6 +3,7 @@ import datetime as dt
 import enum
 import serial
 import requests
+import traceback
 from typing import List, Type, TypeVar
 import re
 
@@ -163,10 +164,11 @@ class VacuumGaugeBase:
             payload += payload_p + payload_s
 
         try:
-            r = requests.post(self.grafana_url, auth = (self.grafana_username, self.grafana_password), data=payload, verify=False, timeout=VacuumGauge.HTTP_TIMEOUT)
+            r = requests.post(self.grafana_url, auth = (self.grafana_username, self.grafana_password), data=payload, verify=False, timeout=VacuumGaugeBase.HTTP_TIMEOUT)
             print(f"{dt.datetime.now().strftime( '%Y.%m.%d %H:%M:%S' )} pushed values to Grafana")
-        except Exception:
-            pass
+        except Exception as e:
+            print(e)
+            traceback.print_exc()
 
         return
 
