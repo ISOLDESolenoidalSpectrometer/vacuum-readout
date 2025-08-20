@@ -107,9 +107,9 @@ class VacuumGaugeBase:
         for i in range(len(self.channels)):
             # check if there is a significant change
             if self.prev_pressure[i] is not None and self.prev_pressure[i] > 1e-12:
-                if self.cur_pressure[i] / self.prev_pressure[i] > VacuumGauge.UPPER_PRESSURE_LIMIT:
+                if self.cur_pressure[i] / self.prev_pressure[i] > VacuumGaugeBase.UPPER_PRESSURE_LIMIT:
                     update_values = True
-                elif self.cur_pressure[i] / self.prev_pressure[i] < VacuumGauge.LOWER_PRESSURE_LIMIT:
+                elif self.cur_pressure[i] / self.prev_pressure[i] < VacuumGaugeBase.LOWER_PRESSURE_LIMIT:
                     update_values = True
             
             if self.prev_status[i] is not None and int(self.cur_status[i]) is not int(self.prev_status[i]):
