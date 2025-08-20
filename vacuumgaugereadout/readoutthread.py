@@ -54,6 +54,10 @@ class VacuumGaugeReadoutThread( threading.Thread ):
         # Store mattermost interface
         self.mattermost = mattermost_interface
 
+        # Store alert pressure items
+        self.alert_pressure_falling = [False]*len(self.gauge.channels)
+        self.alert_pressure_rising = [False]*len(self.gauge.channels)
+
         # Call parent threading constructor
         super().__init__()
 
